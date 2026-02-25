@@ -250,8 +250,12 @@
         function formatStockCode(code) {
             code = code.replace(/\D/g, '');
             if (code.length !== 6) return code;
-            if (code.startsWith('6')) return 'sh' + code;
+            // 上海主板 (60xxxx) + 科创板 (688xxx)
+            if (code.startsWith('60') || code.startsWith('68') || code.startsWith('51') || code.startsWith('50')) return 'sh' + code;
+            // 深圳 (000xxx, 002xxx, 300xxx)
             else if (code.startsWith('0') || code.startsWith('3')) return 'sz' + code;
+            // 北交所
+            else if (code.startsWith('8') || code.startsWith('4')) return 'bj' + code;
             return code;
         }
 
@@ -269,41 +273,80 @@
 
         async function fetchStockData() {
             if (stocks.length === 0) return;
+            const lastUpdateEl = document.getElementById('lastUpdate');
+            lastUpdateEl.textContent = '正在更新...';
+            
             try {
                 const codes = stocks.map(s => s.code).join(',');
                 const url = `https://qt.gtimg.cn/q=${codes}`;
                 const response = await fetch(url);
-                const text = await response.text();
-                parseStockData(text);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const buffer = await response.arrayBuffer();
+                // 腾讯接口返回 GBK 编码，需要解码
+                const decoder = new TextDecoder('GBK');
+                const text = decoder.decode(buffer);
+                const parsedCount = parseStockData(text);
+                
+                if (parsedCount === 0) {
+                    lastUpdateEl.textContent = '数据解析失败 - ' + new Date().toLocaleTimeString('zh-CN');
+                    return;
+                }
+                
                 renderStocks();
                 updateStats();
                 checkAlerts();
-                document.getElementById('lastUpdate').textContent = new Date().toLocaleString('zh-CN');
+                lastUpdateEl.textContent = new Date().toLocaleString('zh-CN') + ` (更新${parsedCount}只)`;
             } catch (error) {
                 console.error('获取数据失败:', error);
+                lastUpdateEl.textContent = '获取失败: ' + error.message + ' - ' + new Date().toLocaleTimeString('zh-CN');
             }
         }
 
         function parseStockData(text) {
             const lines = text.split(';');
+            let parsedCount = 0;
             lines.forEach(line => {
                 const match = line.match(/v_(\w+)="([^"]+)"/);
                 if (match) {
                     const code = match[1];
                     const data = match[2].split('~');
                     if (data.length > 40) {
-                        stockData[code] = {
-                            name: data[1],
-                            price: parseFloat(data[3]),
-                            change: parseFloat(data[4]),
-                            changePercent: parseFloat(data[5]),
-                            open: parseFloat(data[8]),
-                            high: parseFloat(data[9]),
-                            low: parseFloat(data[10])
-                        };
+                        const price = parseFloat(data[3]);
+                        const change = parseFloat(data[4]);
+                        const changePercent = parseFloat(data[5]);
+                        // 验证数据有效性
+                        if (!isNaN(price) && price > 0) {
+                            const open = parseFloat(data[8]) || 0;
+                            const high = parseFloat(data[9]) || 0;
+                            const low = parseFloat(data[10]) || 0;
+                            const prevClose = parseFloat(data[4]) || price;
+                            // 计算振幅
+                            const amplitude = prevClose > 0 ? ((high - low) / prevClose * 100) : 0;
+                            // 成交额(万元)
+                            const turnover = parseFloat(data[14]) || 0;
+                            
+                            stockData[code] = {
+                                name: data[1] || '未知',
+                                price: price,
+                                change: change,
+                                changePercent: changePercent,
+                                open: open,
+                                high: high,
+                                low: low,
+                                amplitude: amplitude,
+                                turnover: turnover
+                            };
+                            parsedCount++;
+                        }
                     }
                 }
             });
+            console.log(`成功解析 ${parsedCount} 只股票数据`);
+            return parsedCount;
         }
 
         function renderStocks() {
@@ -314,7 +357,24 @@
             }
             grid.innerHTML = stocks.map(stock => {
                 const data = stockData[stock.code];
-                if (!data) return '';
+                // 如果数据未加载，显示加载中状态
+                if (!data) {
+                    return `
+                        <div class="stock-card">
+                            <div class="stock-header">
+                                <div class="stock-info">
+                                    <h3>加载中...</h3>
+                                    <span class="stock-code">${stock.code.toUpperCase()}</span>
+                                </div>
+                                <button class="remove-btn" onclick="removeStock('${stock.code}')">×</button>
+                            </div>
+                            <div class="stock-price">--</div>
+                            <div class="stock-change">
+                                <span class="change-percent">--</span>
+                            </div>
+                        </div>
+                    `;
+                }
                 const isUp = data.change >= 0;
                 const changeSymbol = isUp ? '+' : '';
                 return `
@@ -345,11 +405,21 @@
                                 <div>${data.low.toFixed(2)}</div>
                             </div>
                         </div>
+                        <div class="stock-detail" style="margin-top: 8px; padding-top: 8px;">
+                            <div class="detail-item">
+                                <div class="detail-label">振幅</div>
+                                <div>${data.amplitude ? data.amplitude.toFixed(2) + '%' : '--'}</div>
+                            </div>
+                            <div class="detail-item" style="grid-column: span 2;">
+                                <div class="detail-label">成交额</div>
+                                <div>${data.turnover ? (data.turnover / 10000).toFixed(2) + '亿' : '--'}</div>
+                            </div>
+                        </div>
                         <div class="alert-setting">
                             <label>📢 价格提醒设置</label>
                             <div class="alert-inputs">
-                                <input type="number" placeholder="高于此价提醒" value="${stock.alertHigh || ''}" onchange="setAlert('${stock.code}', 'high', this.value)">
-                                <input type="number" placeholder="低于此价提醒" value="${stock.alertLow || ''}" onchange="setAlert('${stock.code}', 'low', this.value)">
+                                <input type="number" placeholder="高于此价提醒" value="${stock.alertHigh || ''}" onchange="setAlert('${stock.code}', 'high', this.value)" step="0.01">
+                                <input type="number" placeholder="低于此价提醒" value="${stock.alertLow || ''}" onchange="setAlert('${stock.code}', 'low', this.value)" step="0.01">
                             </div>
                         </div>
                     </div>
