@@ -746,6 +746,9 @@
 
     <!-- 详情页 -->
     <div id="page-detail" class="page">
+        <div style="margin-bottom:20px;">
+            <button class="btn btn-outline" onclick="showPage('portfolio')">← 返回自选</button>
+        </div>
         <div class="detail-layout">
             <div class="chart-container">
                 <div class="chart-header">
@@ -1445,7 +1448,9 @@
             lines.forEach(line => {
                 const match = line.match(/v_(\w+)="([^"]+)"/);
                 if (match) {
-                    const code = match[1];
+                    const fullCode = match[1];
+                    // 转换为纯数字代码 (sh600519 -> 600519)
+                    const code = fullCode.replace(/^(sh|sz|bj)/, '');
                     const data = match[2].split('~');
                     if (data.length > 40) {
                         const price = parseFloat(data[3]);
