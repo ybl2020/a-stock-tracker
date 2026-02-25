@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A股盯盘神器 - 测试版</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+            padding: 20px;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        .btn {
+            padding: 10px 20px;
+            background: #00d4ff;
+            border: none;
+            border-radius: 5px;
+            color: #fff;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .card {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        input {
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #444;
+            background: #222;
+            color: #fff;
+            width: 200px;
+        }
+        .hidden { display: none; }
+        #userInfo { color: #00ff88; margin: 10px 0; }
+        .search-result {
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📈 A股盯盘神器</h1>
+        
+        <!-- 用户区域 -->
+        <div id="userSection" class="card">
+            <div id="loginForm">
+                <input type="text" id="username" placeholder="用户名">
+                <input type="password" id="password" placeholder="密码">
+                <button class="btn" onclick="login()">登录/注册</button>
+            </div>
+            <div id="userInfo" class="hidden">
+                欢迎，<span id="currentUser"></span>
+                <button class="btn" onclick="logout()">退出</button>
+            </div>
+        </div>
+
+        <!-- 搜索区域 -->
+        <div id="searchSection" class="card hidden">
+            <h3>🔍 搜索股票</h3>
+            <input type="text" id="searchInput" placeholder="输入代码或名称" onkeyup="if(event.keyCode===13)search()">
+            <button class="btn" onclick="search()">搜索</button>
+            <div id="searchResults"></div>
+        </div>
+
+        <!-- 自选区域 -->
+        <div id="portfolioSection" class="card hidden">
+            <h3>⭐ 我的自选</h3>
+            <div id="portfolioList">请先登录</div>
+        </div>
+    </div>
+
+    <script>
+        // 数据存储
+        var currentUser = localStorage.getItem('user');
+        var watchlist = JSON.parse(localStorage.getItem('watchlist') || '{}');
+
+        // 股票数据库
+        var stockDB = [
+            {code:'600519', name:'贵州茅台'},
+            {code:'000001', name:'平安银行'},
+            {code:'300750', name:'宁德时代'},
+            {code:'000858', name:'五粮液'},
+            {code:'002594', name:'比亚迪'},
+            {code:'600036', name:'招商银行'}
+        ];
+
+        // 初始化
+        window.onload = function() {
+            updateUI();
+        };
+
+        function updateUI() {
+            if (currentUser) {
+                document.getElementById('loginForm').classList.add('hidden');
+                document.getElementById('userInfo').classList.remove('hidden');
+                document.getElementById('currentUser').textContent = currentUser;
+                document.getElementById('searchSection').classList.remove('hidden');
+                document.getElementById('portfolioSection').classList.remove('hidden');
+                renderPortfolio();
+            } else {
+                document.getElementById('loginForm').classList.remove('hidden');
+                document.getElementById('userInfo').classList.add('hidden');
+                document.getElementById('searchSection').classList.add('hidden');
+                document.getElementById('portfolioSection').classList.add('hidden');
+            }
+        }
+
+        function login() {
+            var username = document.getElementById('username').value.trim();
+            var password = document.getElementById('password').value.trim();
+            
+            if (!username || !password) {
+                alert('请输入用户名和密码');
+                return;
+            }
+            
+            currentUser = username;
+            localStorage.setItem('user', username);
+            
+            if (!watchlist[username]) {
+                watchlist[username] = [];
+                localStorage.setItem('watchlist', JSON.stringify(watchlist));
+            }
+            
+            updateUI();
+            alert('登录成功！');
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('user');
+            updateUI();
+        }
+
+        function search() {
+            var query = document.getElementById('searchInput').value.trim().toLowerCase();
+            var results = stockDB.filter(function(s) {
+                return s.code.indexOf(query) !== -1 || s.name.indexOf(query) !== -1;
+            });
+            
+            var html = '';
+            if (results.length === 0) {
+                html = '<p>未找到相关股票</p>';
+            } else {
+                results.forEach(function(stock) {
+                    var isAdded = watchlist[currentUser].some(function(s) {
+                        return s.code === stock.code;
+                    });
+                    html += '<div class="search-result">' +
+                        '<span>' + stock.name + ' (' + stock.code + ')</span>' +
+                        (isAdded ? '<span>已添加</span>' : 
+                        '<button class="btn" onclick="addStock(\'' + stock.code + '\', \'' + stock.name + '\')">+ 添加</button>') +
+                        '</div>';
+                });
+            }
+            document.getElementById('searchResults').innerHTML = html;
+        }
+
+        function addStock(code, name) {
+            if (!currentUser) return;
+            
+            var exists = watchlist[currentUser].some(function(s) {
+                return s.code === code;
+            });
+            
+            if (exists) {
+                alert('该股票已在自选列表中');
+                return;
+            }
+            
+            watchlist[currentUser].push({code: code, name: name});
+            localStorage.setItem('watchlist', JSON.stringify(watchlist));
+            alert('添加成功！');
+            search(); // 刷新搜索结果
+            renderPortfolio(); // 刷新自选列表
+        }
+
+        function renderPortfolio() {
+            if (!currentUser) {
+                document.getElementById('portfolioList').innerHTML = '请先登录';
+                return;
+            }
+            
+            var myStocks = watchlist[currentUser] || [];
+            if (myStocks.length === 0) {
+                document.getElementById('portfolioList').innerHTML = '暂无自选股，请先搜索添加';
+                return;
+            }
+            
+            var html = '';
+            myStocks.forEach(function(stock) {
+                html += '<div class="search-result">' +
+                    '<span>' + stock.name + ' (' + stock.code + ')</span>' +
+                    '<button class="btn" onclick="removeStock(\'' + stock.code + '\')">删除</button>' +
+                    '</div>';
+            });
+            document.getElementById('portfolioList').innerHTML = html;
+        }
+
+        function removeStock(code) {
+            if (!currentUser) return;
+            watchlist[currentUser] = watchlist[currentUser].filter(function(s) {
+                return s.code !== code;
+            });
+            localStorage.setItem('watchlist', JSON.stringify(watchlist));
+            renderPortfolio();
+        }
+    </script>
+</body>
+</html>
