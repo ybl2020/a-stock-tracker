@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A股盯盘神器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 30px; }
+        header h1 {
+            font-size: 2.5em;
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .market-status {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .status-item {
+            background: rgba(255,255,255,0.1);
+            padding: 10px 20px;
+            border-radius: 20px;
+        }
+        .status-item span { color: #00ff88; font-weight: bold; }
+        .add-stock {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .add-stock input {
+            flex: 1;
+            min-width: 150px;
+            padding: 12px 15px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 1em;
+        }
+        .add-stock button {
+            padding: 12px 25px;
+            background: linear-gradient(90deg, #00d4ff, #0099cc);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 1em;
+            cursor: pointer;
+        }
+        .quick-add {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            width: 100%;
+        }
+        .quick-add button {
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 15px;
+            color: #fff;
+            font-size: 0.85em;
+            cursor: pointer;
+        }
+        .stock-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+        .stock-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.3s;
+        }
+        .stock-card.up { border-left: 4px solid #ff4757; }
+        .stock-card.down { border-left: 4px solid #2ed573; }
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+        }
+        .stock-info h3 { font-size: 1.3em; margin-bottom: 5px; }
+        .stock-code { color: rgba(255,255,255,0.6); font-size: 0.9em; }
+        .remove-btn {
+            background: rgba(255,71,87,0.2);
+            border: none;
+            color: #ff4757;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2em;
+        }
+        .stock-price { font-size: 2em; font-weight: bold; margin-bottom: 10px; }
+        .stock-change { display: flex; gap: 15px; font-size: 1.1em; }
+        .change-percent {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        .up .change-percent { background: rgba(255,71,87,0.2); color: #ff4757; }
+        .down .change-percent { background: rgba(46,213,115,0.2); color: #2ed573; }
+        .stock-detail {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .detail-item { text-align: center; }
+        .detail-label { font-size: 0.8em; color: rgba(255,255,255,0.5); }
+        .alert-setting {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .alert-setting label {
+            font-size: 0.85em;
+            color: rgba(255,255,255,0.7);
+            display: block;
+            margin-bottom: 8px;
+        }
+        .alert-inputs { display: flex; gap: 8px; }
+        .alert-inputs input {
+            flex: 1;
+            padding: 8px 10px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 0.9em;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255,255,255,0.5);
+        }
+        .update-time {
+            text-align: center;
+            margin-top: 30px;
+            color: rgba(255,255,255,0.4);
+            font-size: 0.9em;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: rgba(255,71,87,0.9);
+            border-radius: 10px;
+            color: #fff;
+            font-weight: bold;
+            transform: translateX(400px);
+            transition: transform 0.3s;
+            z-index: 1000;
+        }
+        .notification.show { transform: translateX(0); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📈 A股盯盘神器</h1>
+            <div class="market-status">
+                <div class="status-item">📊 自选股: <span id="stockCount">0</span></div>
+                <div class="status-item">🟢 上涨: <span id="upCount">0</span></div>
+                <div class="status-item">🔴 下跌: <span id="downCount">0</span></div>
+                <div class="status-item">⏱️ 更新: <span id="nextUpdate">5s</span></div>
+            </div>
+        </header>
+
+        <div class="add-stock">
+            <input type="text" id="stockInput" placeholder="输入股票代码 (如: 000001, 600519)" maxlength="6">
+            <button onclick="addStock()">➕ 添加</button>
+            <div class="quick-add">
+                <button onclick="quickAdd('000001')">平安银行</button>
+                <button onclick="quickAdd('600519')">贵州茅台</button>
+                <button onclick="quickAdd('300750')">宁德时代</button>
+                <button onclick="quickAdd('000858')">五粮液</button>
+                <button onclick="quickAdd('002594')">比亚迪</button>
+                <button onclick="quickAdd('600036')">招商银行</button>
+            </div>
+        </div>
+
+        <div id="stockGrid" class="stock-grid">
+            <div class="empty-state">
+                <p>还没有自选股，添加一个开始盯盘吧！</p>
+            </div>
+        </div>
+
+        <div class="update-time">
+            最后更新: <span id="lastUpdate">--</span> | 数据仅供参考，投资有风险
+        </div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script>
+        let stocks = JSON.parse(localStorage.getItem('watchStocks') || '[]');
+        let stockData = {};
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderStocks();
+            startAutoUpdate();
+            document.getElementById('stockInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') addStock();
+            });
+        });
+
+        function addStock() {
+            const input = document.getElementById('stockInput');
+            let code = input.value.trim();
+            if (!code) return;
+            code = formatStockCode(code);
+            if (stocks.find(s => s.code === code)) {
+                showNotification('该股票已在自选列表中');
+                return;
+            }
+            stocks.push({ code: code, alertHigh: null, alertLow: null });
+            saveStocks();
+            input.value = '';
+            fetchStockData();
+        }
+
+        function quickAdd(code) {
+            document.getElementById('stockInput').value = code;
+            addStock();
+        }
+
+        function formatStockCode(code) {
+            code = code.replace(/\D/g, '');
+            if (code.length !== 6) return code;
+            if (code.startsWith('6')) return 'sh' + code;
+            else if (code.startsWith('0') || code.startsWith('3')) return 'sz' + code;
+            return code;
+        }
+
+        function removeStock(code) {
+            stocks = stocks.filter(s => s.code !== code);
+            delete stockData[code];
+            saveStocks();
+            renderStocks();
+            updateStats();
+        }
+
+        function saveStocks() {
+            localStorage.setItem('watchStocks', JSON.stringify(stocks));
+        }
+
+        async function fetchStockData() {
+            if (stocks.length === 0) return;
+            try {
+                const codes = stocks.map(s => s.code).join(',');
+                const url = `https://qt.gtimg.cn/q=${codes}`;
+                const response = await fetch(url);
+                const text = await response.text();
+                parseStockData(text);
+                renderStocks();
+                updateStats();
+                checkAlerts();
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleString('zh-CN');
+            } catch (error) {
+                console.error('获取数据失败:', error);
+            }
+        }
+
+        function parseStockData(text) {
+            const lines = text.split(';');
+            lines.forEach(line => {
+                const match = line.match(/v_(\w+)="([^"]+)"/);
+                if (match) {
+                    const code = match[1];
+                    const data = match[2].split('~');
+                    if (data.length > 40) {
+                        stockData[code] = {
+                            name: data[1],
+                            price: parseFloat(data[3]),
+                            change: parseFloat(data[4]),
+                            changePercent: parseFloat(data[5]),
+                            open: parseFloat(data[8]),
+                            high: parseFloat(data[9]),
+                            low: parseFloat(data[10])
+                        };
+                    }
+                }
+            });
+        }
+
+        function renderStocks() {
+            const grid = document.getElementById('stockGrid');
+            if (stocks.length === 0) {
+                grid.innerHTML = '<div class="empty-state"><p>还没有自选股，添加一个开始盯盘吧！</p></div>';
+                return;
+            }
+            grid.innerHTML = stocks.map(stock => {
+                const data = stockData[stock.code];
+                if (!data) return '';
+                const isUp = data.change >= 0;
+                const changeSymbol = isUp ? '+' : '';
+                return `
+                    <div class="stock-card ${isUp ? 'up' : 'down'}">
+                        <div class="stock-header">
+                            <div class="stock-info">
+                                <h3>${data.name}</h3>
+                                <span class="stock-code">${stock.code.toUpperCase()}</span>
+                            </div>
+                            <button class="remove-btn" onclick="removeStock('${stock.code}')">×</button>
+                        </div>
+                        <div class="stock-price">${data.price.toFixed(2)}</div>
+                        <div class="stock-change">
+                            <span class="change-percent">${changeSymbol}${data.change.toFixed(2)}</span>
+                            <span class="change-percent">${changeSymbol}${data.changePercent.toFixed(2)}%</span>
+                        </div>
+                        <div class="stock-detail">
+                            <div class="detail-item">
+                                <div class="detail-label">今开</div>
+                                <div>${data.open.toFixed(2)}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">最高</div>
+                                <div>${data.high.toFixed(2)}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">最低</div>
+                                <div>${data.low.toFixed(2)}</div>
+                            </div>
+                        </div>
+                        <div class="alert-setting">
+                            <label>📢 价格提醒设置</label>
+                            <div class="alert-inputs">
+                                <input type="number" placeholder="高于此价提醒" value="${stock.alertHigh || ''}" onchange="setAlert('${stock.code}', 'high', this.value)">
+                                <input type="number" placeholder="低于此价提醒" value="${stock.alertLow || ''}" onchange="setAlert('${stock.code}', 'low', this.value)">
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateStats() {
+            document.getElementById('stockCount').textContent = stocks.length;
+            let up = 0, down = 0;
+            stocks.forEach(stock => {
+                const data = stockData[stock.code];
+                if (data) {
+                    if (data.change >= 0) up++;
+                    else down++;
+                }
+            });
+            document.getElementById('upCount').textContent = up;
+            document.getElementById('downCount').textContent = down;
+        }
+
+        function setAlert(code, type, value) {
+            const stock = stocks.find(s => s.code === code);
+            if (stock) {
+                stock[type === 'high' ? 'alertHigh' : 'alertLow'] = value ? parseFloat(value) : null;
+                saveStocks();
+            }
+        }
+
+        function checkAlerts() {
+            stocks.forEach(stock => {
+                const data = stockData[stock.code];
+                if (!data) return;
+                if (stock.alertHigh && data.price >= stock.alertHigh) {
+                    showNotification(`🚨 ${data.name} 涨破 ${stock.alertHigh}！当前 ${data.price}`);
+                    stock.alertHigh = null;
+                    saveStocks();
+                }
+                if (stock.alertLow && data.price <= stock.alertLow) {
+                    showNotification(`🚨 ${data.name} 跌破 ${stock.alertLow}！当前 ${data.price}`);
+                    stock.alertLow = null;
+                    saveStocks();
+                }
+            });
+        }
+
+        function showNotification(message) {
+            const notif = document.getElementById('notification');
+            notif.textContent = message;
+            notif.classList.add('show');
+            setTimeout(() => notif.classList.remove('show'), 5000);
+        }
+
+        function startAutoUpdate() {
+            fetchStockData();
+            setInterval(fetchStockData, 5000);
+            let countdown = 5;
+            setInterval(() => {
+                countdown--;
+                if (countdown <= 0) countdown = 5;
+                document.getElementById('nextUpdate').textContent = countdown + 's';
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
